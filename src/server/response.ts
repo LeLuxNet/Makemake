@@ -25,8 +25,12 @@ export class Response {
     );
   }
 
-  content(content: string) {
-    return this._send(Status.Success, "text/gemini", content);
+  content(content: string | string[], lang?: string) {
+    return this._send(
+      Status.Success,
+      "text/gemini" + (lang === undefined ? "" : `; lang=${lang}`),
+      typeof content === "string" ? content : content.join("\n")
+    );
   }
 
   rateLimit(seconds: number) {
