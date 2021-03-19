@@ -8,8 +8,9 @@ const main = async () => {
     key: await readFile(join(__dirname, "../key.pem"), "ascii"),
   });
 
-  server.on("req", (req, res) => {
+  server.get((req, res) => {
     console.log(req);
+    res.content("Hello world!");
   });
 
   server.listen();

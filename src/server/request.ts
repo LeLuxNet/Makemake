@@ -1,7 +1,4 @@
-export class Request {
-  url: string;
-
-  constructor(url: string) {
-    this.url = url;
-  }
+export interface Request {
+  path: string;
+  query: string;
 }

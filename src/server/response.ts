@@ -6,15 +6,48 @@ export class Response {
 
   constructor(socket: Socket) {
     this.socket = socket;
+
+    this.socket.on("error", (err) => {
+      if ((err as any).code === "ECONNRESET") return;
+
+      throw err;
+    });
   }
 
-  input(prompt: string) {
-    return this._send(Status.INPUT, prompt);
+  input(prompt: string, secure: boolean = false) {
+    return this._send(secure ? Status.SensitiveInput : Status.Input, prompt);
   }
 
-  _send(status: number, meta: string = "text/gemini", body?: string) {
-    this.socket.end(
-      `${status} ${meta}\r\n` + (body !== undefined ? `${body}\r\n` : "")
+  redirect(url: string, temporary: boolean = true) {
+    return this._send(
+      temporary ? Status.RedirectTemporary : Status.RedirectPermanent,
+      url
     );
+  }
+
+  content(content: string) {
+    return this._send(Status.Success, "text/gemini", content);
+  }
+
+  rateLimit(seconds: number) {
+    return this._send(Status.SlowDown, seconds.toString());
+  }
+
+  status(code: Status) {
+    return this._send(code, "");
+  }
+
+  get sent() {
+    return !this.socket.writable;
+  }
+
+  _send(status: Status, meta: string, body?: string) {
+    if (this.sent) throw "The response has already been sent";
+
+    this.socket.write(`${status} ${meta}\r\n`);
+    if (body !== undefined) {
+      this.socket.write(body);
+    }
+    this.socket.end();
   }
 }

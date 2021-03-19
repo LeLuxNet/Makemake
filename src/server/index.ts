@@ -1,24 +1,19 @@
-import EventEmitter from "events";
 import { createServer, Server as TLSServer } from "tls";
+import { URL } from "url";
 import { Request } from "./request";
 import { Response } from "./response";
+import { Status } from "./status";
 
 interface ServerOption {
   cert: string;
   key: string;
 }
 
-export declare interface Server {
-  emit(event: "req", req: Request, res: Response): boolean;
-  on(event: "req", listener: (req: Request, res: Response) => void): this;
-}
-
-export class Server extends EventEmitter {
+export class Server {
+  listeners: ((req: Request, res: Response) => void)[] = [];
   server: TLSServer;
 
   constructor({ cert, key }: ServerOption) {
-    super();
-
     this.server = createServer((socket) => {
       socket.once("readable", () => {
         var buf: Buffer = Buffer.alloc(0);
@@ -35,12 +30,24 @@ export class Server extends EventEmitter {
           }
         }
 
-        const url = buf.toString();
+        const url = new URL(buf.toString());
 
-        const req = new Request(url);
         const res = new Response(socket);
+        const req: Request = {
+          path: url.pathname.slice(1),
+          query: decodeURI(url.search.slice(1)),
+        };
 
-        this.emit("req", req, res);
+        this.listeners.forEach((f) => {
+          try {
+            f(req, res);
+          } catch (err) {
+            console.error(err);
+            if (!res.sent) {
+              res.status(Status.CGIError);
+            }
+          }
+        });
       });
     });
 
@@ -48,6 +55,10 @@ export class Server extends EventEmitter {
       cert,
       key,
     });
+  }
+
+  get(fn: (req: Request, res: Response) => void) {
+    this.listeners.push(fn);
   }
 
   listen() {
