@@ -4,13 +4,15 @@ import { Request } from "./request";
 import { Response } from "./response";
 import { Status } from "./status";
 
+type GetCallback = (req: Request, res: Response) => void;
+
 interface ServerOption {
   cert: string;
   key: string;
 }
 
 export class Server {
-  listeners: ((req: Request, res: Response) => void)[] = [];
+  listeners: [RegExp, GetCallback][] = [];
   server: TLSServer;
 
   constructor({ cert, key }: ServerOption) {
@@ -31,23 +33,34 @@ export class Server {
         }
 
         const url = new URL(buf.toString());
+        const path = url.pathname.slice(1);
 
         const res = new Response(socket);
-        const req: Request = {
-          path: url.pathname.slice(1),
-          query: decodeURI(url.search.slice(1)),
-        };
 
-        this.listeners.forEach((f) => {
+        const l = this.listeners.find(([regex, fn]) => {
+          const match = path.match(regex);
+          if (match === null) return false;
+
+          const req: Request = {
+            path,
+            query: decodeURI(url.search.slice(1)),
+            params: Object.assign({}, match.groups),
+          };
+
           try {
-            f(req, res);
+            fn(req, res);
           } catch (err) {
-            console.error(err);
             if (!res.sent) {
               res.status(Status.CGIError);
             }
+            console.error(err);
           }
+          return true;
         });
+
+        if (l === undefined) {
+          res.status(Status.NotFound);
+        }
       });
     });
 
@@ -57,13 +70,19 @@ export class Server {
     });
   }
 
-  get(fn: (req: Request, res: Response) => void) {
-    this.listeners.push(fn);
+  get(path: string, fn: GetCallback) {
+    if (path.startsWith("/")) {
+      path = path.slice(1);
+    }
+
+    const regex = new RegExp(
+      "^" + path.replace(/{([a-z]+)}/, "(?<$1>[^/]+)") + "$"
+    );
+
+    this.listeners.push([regex, fn]);
   }
 
   listen() {
-    this.server.listen(1965, () => {
-      console.log("Listening");
-    });
+    return new Promise<void>((resolve) => this.server.listen(1965, resolve));
   }
 }
