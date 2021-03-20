@@ -62,7 +62,11 @@ export default async function fourChan(router: Router) {
             var body: string[] = [];
             if (p.filename !== undefined) {
               body.push(
-                intLink(req, `../../images/${p.tim}${p.ext}`, p.filename)
+                intLink(
+                  req,
+                  `../../images/${p.tim}${p.ext}`,
+                  `${p.filename}${p.ext}`
+                )
               );
             }
 
