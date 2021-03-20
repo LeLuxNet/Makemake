@@ -1,4 +1,6 @@
+import axios from "axios";
 import { Socket } from "net";
+import { Readable } from "stream";
 import { Status } from "./status";
 
 export class Response {
@@ -33,6 +35,17 @@ export class Response {
     );
   }
 
+  media(mimeType: string, data: string) {
+    return this._send(Status.Success, mimeType, data);
+  }
+
+  async mediaHttp(url: string) {
+    const res = await axios.get(url, {
+      responseType: "stream",
+    });
+    return this._send(Status.Success, res.headers["content-type"], res.data);
+  }
+
   rateLimit(seconds: number) {
     return this._send(Status.SlowDown, seconds.toString());
   }
@@ -45,12 +58,17 @@ export class Response {
     return !this.socket.writable;
   }
 
-  _send(status: Status, meta: string, body?: string) {
+  _send(status: Status, meta: string, body?: string | Readable) {
     if (this.sent) throw "The response has already been sent";
 
     this.socket.write(`${status} ${meta}\r\n`);
     if (body !== undefined) {
-      this.socket.write(body);
+      if (typeof body === "string") {
+        this.socket.write(body);
+      } else {
+        body.pipe(this.socket);
+        return;
+      }
     }
     this.socket.end();
   }

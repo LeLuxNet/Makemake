@@ -9,13 +9,14 @@ type GetCallback = (req: Request, res: Response) => void;
 interface ServerOption {
   cert: string;
   key: string;
+  host?: string;
 }
 
 export class Server {
   listeners: [RegExp, GetCallback][] = [];
   server: TLSServer;
 
-  constructor({ cert, key }: ServerOption) {
+  constructor({ cert, key, host = "localhost" }: ServerOption) {
     this.server = createServer((socket) => {
       socket.once("readable", () => {
         var buf: Buffer = Buffer.alloc(0);
@@ -64,7 +65,7 @@ export class Server {
       });
     });
 
-    this.server.addContext("localhost", {
+    this.server.addContext(host, {
       cert,
       key,
     });
@@ -76,7 +77,7 @@ export class Server {
     }
 
     const regex = new RegExp(
-      "^" + path.replace(/{([a-z]+)}/, "(?<$1>[^/]+)") + "$"
+      "^" + path.replace(/{([a-z]+)}/g, "(?<$1>[^/]+)") + "$"
     );
 
     this.listeners.push([regex, fn]);
