@@ -1,4 +1,11 @@
-export function link(url: string, title?: string) {
+import { join } from "path";
+import { Request } from "./request";
+
+export function intLink(req: Request, path: string, title?: string) {
+  return extLink("/" + join(req.fullPath, path).replace(/\\/g, "/"), title);
+}
+
+export function extLink(url: string, title?: string) {
   if (title === undefined) {
     return `=> ${url}`;
   } else {

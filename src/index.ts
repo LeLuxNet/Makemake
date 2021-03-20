@@ -1,7 +1,7 @@
 import { readFile } from "fs/promises";
 import { join } from "path";
-import fourChan from "./4chan";
 import { Server } from "./server";
+import fourChan from "./sites/4chan";
 
 const cert = readFile(join(__dirname, "../cert.pem"), "utf-8");
 const key = readFile(join(__dirname, "../key.pem"), "utf-8");
@@ -12,7 +12,7 @@ const main = async () => {
     key: await key,
   });
 
-  await fourChan("/4chan", server);
+  await fourChan(server.dir("/4chan"));
 
   await server.listen();
   console.log("Listening");

@@ -1,7 +1,7 @@
 import axios, { AxiosError } from "axios";
 import { load } from "cheerio";
-import { Server } from "../server";
-import { heading, link } from "../server/content";
+import { heading, intLink } from "../server/content";
+import { Router } from "../server/router";
 import { Status } from "../server/status";
 
 const api = axios.create({ baseURL: "https://a.4cdn.org" });
@@ -11,7 +11,7 @@ interface Board {
   title: string;
 }
 
-export default async function fourChan(path: string, server: Server) {
+export default async function fourChan(router: Router) {
   const boardMap: { [key: string]: Board } = {};
   const boards: Board[] = [];
 
@@ -26,15 +26,15 @@ export default async function fourChan(path: string, server: Server) {
     boards.push(board);
   });
 
-  server.get(path, async (req, res) => {
+  router.get("/", async (req, res) => {
     res.content([
       heading(1, "4chan"),
       heading(2, "boards"),
-      ...boards.map((board) => link(`${path}/${board.key}`, board.title)),
+      ...boards.map((board) => intLink(req, board.key, board.title)),
     ]);
   });
 
-  server.get(`${path}/{board}`, async (req, res) => {
+  router.get("/{board}", async (req, res) => {
     const board = boardMap[req.params.board];
     if (board === undefined) return res.status(Status.NotFound);
 
@@ -45,12 +45,12 @@ export default async function fourChan(path: string, server: Server) {
       heading(1, "4chan"),
       heading(2, `/${board.key}/ - ${board.title}`),
       ...threads.map((t: any) =>
-        link(`${req.params.board}/thread/${t.no}`, `${t.no} [${t.replies}]`)
+        intLink(req, `thread/${t.no}`, `${t.no} [${t.replies}]`)
       ),
     ]);
   });
 
-  server.get(`${path}/{board}/thread/{thread}`, (req, res) => {
+  router.get("/{board}/thread/{thread}", (req, res) => {
     api
       .get(`${req.params.board}/thread/${req.params.thread}.json`)
       .then((res2) => {
@@ -61,7 +61,9 @@ export default async function fourChan(path: string, server: Server) {
           ...posts.map((p: any) => {
             var body: string[] = [];
             if (p.filename !== undefined) {
-              body.push(link(`../images/${p.tim}${p.ext}`, p.filename));
+              body.push(
+                intLink(req, `../../images/${p.tim}${p.ext}`, p.filename)
+              );
             }
 
             if (p.com !== undefined) {
@@ -74,12 +76,16 @@ export default async function fourChan(path: string, server: Server) {
                   if (line.tagName === "br") continue;
                   else if (l.hasClass("quotelink")) {
                     if (l.text().startsWith(">>>")) {
-                      body.push(link(`${path}${l.prop("href")}`, l.text()));
+                      body.push(intLink(req, l.prop("href"), l.text()));
                     } else {
                       const id = l.text().slice(2);
                       const op = req.params.thread === id;
                       body.push(
-                        link(req.params.thread, `>>${id}${op ? " (OP)" : ""}`)
+                        intLink(
+                          req,
+                          `../${req.params.thread}`,
+                          `>>${id}${op ? " (OP)" : ""}`
+                        )
                       );
                     }
                   } else if (l.hasClass("deadlink")) {
@@ -99,7 +105,7 @@ export default async function fourChan(path: string, server: Server) {
       });
   });
 
-  server.get(`${path}/{board}/images/{image}`, (req, res) => {
+  router.get("/{board}/images/{image}", (req, res) => {
     res.mediaHttp(`https://i.4cdn.org/${req.params.board}/${req.params.image}`);
   });
 }

@@ -1,10 +1,8 @@
 import { createServer, Server as TLSServer } from "tls";
 import { URL } from "url";
-import { Request } from "./request";
 import { Response } from "./response";
+import { Router } from "./router";
 import { Status } from "./status";
-
-type GetCallback = (req: Request, res: Response) => void;
 
 interface ServerOption {
   cert: string;
@@ -12,11 +10,12 @@ interface ServerOption {
   host?: string;
 }
 
-export class Server {
-  listeners: [RegExp, GetCallback][] = [];
+export class Server extends Router {
   server: TLSServer;
 
   constructor({ cert, key, host = "localhost" }: ServerOption) {
+    super();
+
     this.server = createServer((socket) => {
       socket.once("readable", () => {
         var buf: Buffer = Buffer.alloc(0);
@@ -38,28 +37,14 @@ export class Server {
 
         const res = new Response(socket);
 
-        const l = this.listeners.find(([regex, fn]) => {
-          const match = path.match(regex);
-          if (match === null) return false;
-
-          const req: Request = {
-            path,
-            query: decodeURI(url.search.slice(1)),
-            params: Object.assign({}, match.groups),
-          };
-
-          try {
-            fn(req, res);
-          } catch (err) {
-            if (!res.sent) {
-              res.status(Status.CGIError);
-            }
-            console.error(err);
-          }
-          return true;
+        const found = this.trigger({
+          fullPath: path,
+          path,
+          query: decodeURI(url.search.slice(1)),
+          res,
         });
 
-        if (l === undefined) {
+        if (!found) {
           res.status(Status.NotFound);
         }
       });
@@ -69,18 +54,6 @@ export class Server {
       cert,
       key,
     });
-  }
-
-  get(path: string, fn: GetCallback) {
-    if (path.startsWith("/")) {
-      path = path.slice(1);
-    }
-
-    const regex = new RegExp(
-      "^" + path.replace(/{([a-z]+)}/g, "(?<$1>[^/]+)") + "$"
-    );
-
-    this.listeners.push([regex, fn]);
   }
 
   listen() {
